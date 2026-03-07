@@ -1,14 +1,24 @@
+/**
+ * HistoryScreen.tsx
+ *
+ * Pantalla de historial de activaciones.
+ * Muestra todas las veces que se activó cada recordatorio,
+ * agrupadas por día para fácil visualización.
+ *
+ * Usa SectionList para agrupar por fecha.
+ */
+
 import React, { useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   SectionList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useReminders, TriggerRecord } from "../../context/RemindersContext";
+import { useReminders } from "../../context/RemindersContext";
 
+// Tipo para cada item del historial
 type HistoryItem = {
   reminderId: string;
   reminderTitle: string;
@@ -16,6 +26,7 @@ type HistoryItem = {
   type: "location" | "datetime";
 };
 
+// Tipo para las secciones (agrupadas por día)
 type Section = {
   title: string;
   data: HistoryItem[];
@@ -24,10 +35,13 @@ type Section = {
 export default function HistoryScreen() {
   const { reminders } = useReminders();
 
-  // Agrupar historial por fecha
+  // ============ PROCESAR HISTORIAL ============
+  // Extraemos todas las activaciones de todos los recordatorios
+  // y las agrupamos por día
   const sections = useMemo(() => {
     const allHistory: HistoryItem[] = [];
 
+    // Recorrer cada recordatorio y extraer su historial
     reminders.forEach((r) => {
       if (r.triggerHistory && r.triggerHistory.length > 0) {
         r.triggerHistory.forEach((h) => {
@@ -41,7 +55,7 @@ export default function HistoryScreen() {
       }
     });
 
-    // Ordenar por fecha descendente
+    // Ordenar por fecha (más reciente primero)
     allHistory.sort(
       (a, b) =>
         new Date(b.triggeredAt).getTime() - new Date(a.triggeredAt).getTime()
@@ -51,6 +65,7 @@ export default function HistoryScreen() {
     const groups: Record<string, HistoryItem[]> = {};
 
     allHistory.forEach((item) => {
+      // Formatear fecha como título de sección
       const date = new Date(item.triggeredAt).toLocaleDateString("es-HN", {
         weekday: "long",
         day: "numeric",
@@ -64,17 +79,20 @@ export default function HistoryScreen() {
       groups[date].push(item);
     });
 
+    // Convertir a formato de SectionList
     return Object.entries(groups).map(([title, data]) => ({
       title,
       data,
     }));
   }, [reminders]);
 
+  // Total de activaciones
   const totalActivations = sections.reduce(
     (acc, section) => acc + section.data.length,
     0
   );
 
+  // ============ RENDER ITEM ============
   const renderItem = ({ item }: { item: HistoryItem }) => {
     const time = new Date(item.triggeredAt).toLocaleTimeString("es-HN", {
       hour: "2-digit",
@@ -83,6 +101,7 @@ export default function HistoryScreen() {
 
     return (
       <View style={styles.historyItem}>
+        {/* Icono según tipo de activación */}
         <View
           style={[
             styles.iconContainer,
@@ -98,12 +117,16 @@ export default function HistoryScreen() {
             color={item.type === "location" ? "#4A90D9" : "#FB8C00"}
           />
         </View>
+
+        {/* Título y hora */}
         <View style={styles.itemContent}>
           <Text style={styles.itemTitle} numberOfLines={1}>
             {item.reminderTitle}
           </Text>
           <Text style={styles.itemTime}>{time}</Text>
         </View>
+
+        {/* Badge de tipo */}
         <View style={styles.typeBadge}>
           <Text style={styles.typeText}>
             {item.type === "location" ? "Ubicacion" : "Fecha"}
@@ -113,17 +136,15 @@ export default function HistoryScreen() {
     );
   };
 
-  const renderSectionHeader = ({
-    section,
-  }: {
-    section: Section;
-  }) => (
+  // ============ RENDER HEADER DE SECCIÓN ============
+  const renderSectionHeader = ({ section }: { section: Section }) => (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{section.title}</Text>
       <Text style={styles.sectionCount}>{section.data.length}</Text>
     </View>
   );
 
+  // ============ ESTADO VACÍO ============
   if (sections.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -137,9 +158,10 @@ export default function HistoryScreen() {
     );
   }
 
+  // ============ RENDER PRINCIPAL ============
   return (
     <View style={styles.container}>
-      {/* Resumen */}
+      {/* Tarjeta de resumen */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryValue}>{totalActivations}</Text>
@@ -152,7 +174,7 @@ export default function HistoryScreen() {
         </View>
       </View>
 
-      {/* Lista agrupada */}
+      {/* Lista agrupada por día */}
       <SectionList
         sections={sections}
         keyExtractor={(item, index) => `${item.reminderId}-${item.triggeredAt}-${index}`}
@@ -165,6 +187,8 @@ export default function HistoryScreen() {
     </View>
   );
 }
+
+// ============ ESTILOS ============
 
 const styles = StyleSheet.create({
   container: {

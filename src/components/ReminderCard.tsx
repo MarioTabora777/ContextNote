@@ -1,8 +1,22 @@
+/**
+ * ReminderCard.tsx
+ *
+ * Componente reutilizable que muestra un recordatorio en formato tarjeta.
+ * Incluye:
+ * - Badge de tipo (ubicación/fecha/ambos)
+ * - Badge de prioridad (alta/media/baja con colores)
+ * - Información del recordatorio
+ * - Switch para activar/desactivar
+ * - Botón para marcar como completado
+ * - Botón para eliminar
+ */
+
 import React from "react";
 import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Reminder } from "../context/RemindersContext";
 
+// Colores por prioridad
 const PRIORITY_COLORS = {
   high: "#E53935",
   medium: "#FB8C00",
@@ -15,10 +29,18 @@ const PRIORITY_LABELS = {
   low: "Baja",
 };
 
+// Iconos por tipo de recordatorio
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   location: "location",
   datetime: "time",
   both: "layers",
+};
+
+type Props = {
+  reminder: Reminder;
+  onToggle: () => void;           // Activar/desactivar
+  onDelete?: () => void;          // Eliminar (opcional)
+  onToggleCompleted?: () => void; // Marcar completado (opcional)
 };
 
 export default function ReminderCard({
@@ -26,12 +48,8 @@ export default function ReminderCard({
   onToggle,
   onDelete,
   onToggleCompleted,
-}: {
-  reminder: Reminder;
-  onToggle: () => void;
-  onDelete?: () => void;
-  onToggleCompleted?: () => void;
-}) {
+}: Props) {
+  // Formatea fecha para mostrar
   const formatDate = (dateStr?: string, timeStr?: string) => {
     if (!dateStr) return null;
     const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
@@ -44,6 +62,7 @@ export default function ReminderCard({
     });
   };
 
+  // Confirmar antes de eliminar
   const confirmDelete = () => {
     Alert.alert(
       "Eliminar recordatorio",
@@ -63,8 +82,9 @@ export default function ReminderCard({
         { borderLeftColor: PRIORITY_COLORS[reminder.priority || "medium"] },
       ]}
     >
-      {/* Header con tipo e iconos */}
+      {/* Header: tipo + prioridad + botón eliminar */}
       <View style={styles.header}>
+        {/* Badge de tipo */}
         <View style={styles.typeTag}>
           <Ionicons
             name={TYPE_ICONS[reminder.reminderType || "location"]}
@@ -79,7 +99,9 @@ export default function ReminderCard({
               : "Ambos"}
           </Text>
         </View>
+
         <View style={styles.headerRight}>
+          {/* Badge de prioridad */}
           <View
             style={[
               styles.priorityBadge,
@@ -90,6 +112,8 @@ export default function ReminderCard({
               {PRIORITY_LABELS[reminder.priority || "medium"]}
             </Text>
           </View>
+
+          {/* Botón eliminar */}
           {onDelete && (
             <TouchableOpacity onPress={confirmDelete} style={styles.deleteBtn}>
               <Ionicons name="trash-outline" size={18} color="#E53935" />
@@ -101,15 +125,17 @@ export default function ReminderCard({
       {/* Contenido principal */}
       <View style={styles.content}>
         <View style={{ flex: 1 }}>
+          {/* Título (tachado si está completado) */}
           <Text
             style={[styles.title, reminder.isCompleted && styles.titleCompleted]}
           >
             {reminder.title}
           </Text>
 
+          {/* Nota opcional */}
           {!!reminder.note && <Text style={styles.note}>{reminder.note}</Text>}
 
-          {/* Info de ubicación */}
+          {/* Info de ubicación (si tiene) */}
           {reminder.radiusMeters && (
             <View style={styles.metaRow}>
               <Ionicons name="radio-button-on" size={12} color="#78909C" />
@@ -117,7 +143,7 @@ export default function ReminderCard({
             </View>
           )}
 
-          {/* Info de fecha */}
+          {/* Info de fecha (si tiene) */}
           {reminder.scheduledDate && (
             <View style={styles.metaRow}>
               <Ionicons name="calendar-outline" size={12} color="#78909C" />
@@ -138,7 +164,7 @@ export default function ReminderCard({
             </Text>
           </View>
 
-          {/* Historial */}
+          {/* Contador del historial */}
           {reminder.triggerHistory && reminder.triggerHistory.length > 0 && (
             <View style={styles.metaRow}>
               <Ionicons name="analytics-outline" size={12} color="#4A90D9" />
@@ -149,16 +175,13 @@ export default function ReminderCard({
           )}
         </View>
 
-        {/* Controles */}
+        {/* Controles: switch + checkbox completado */}
         <View style={styles.controls}>
           <Switch value={reminder.isEnabled} onValueChange={onToggle} />
           {onToggleCompleted && (
             <TouchableOpacity
               onPress={onToggleCompleted}
-              style={[
-                styles.completeBtn,
-                reminder.isCompleted && styles.completeBtnDone,
-              ]}
+              style={styles.completeBtn}
             >
               <Ionicons
                 name={reminder.isCompleted ? "checkmark-circle" : "checkmark-circle-outline"}
@@ -172,6 +195,8 @@ export default function ReminderCard({
     </View>
   );
 }
+
+// ============ ESTILOS ============
 
 const styles = StyleSheet.create({
   card: {
@@ -264,5 +289,4 @@ const styles = StyleSheet.create({
   completeBtn: {
     padding: 4,
   },
-  completeBtnDone: {},
 });

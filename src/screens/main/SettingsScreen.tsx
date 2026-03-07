@@ -1,3 +1,16 @@
+/**
+ * SettingsScreen.tsx
+ *
+ * Pantalla de ajustes de la aplicación.
+ * Incluye:
+ * - Información del perfil del usuario
+ * - Estadísticas rápidas
+ * - Preferencias (notificaciones, ubicación)
+ * - Opciones de datos (exportar, limpiar, eliminar)
+ * - Información de la app
+ * - Cerrar sesión
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -11,7 +24,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import { useReminders } from "../../context/RemindersContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// ============ COMPONENTE AUXILIAR ============
 
 type SettingItemProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -19,10 +33,14 @@ type SettingItemProps = {
   title: string;
   subtitle?: string;
   onPress?: () => void;
-  rightElement?: React.ReactNode;
-  danger?: boolean;
+  rightElement?: React.ReactNode;  // Para switches u otros controles
+  danger?: boolean;  // Estilo rojo para acciones destructivas
 };
 
+/**
+ * Item de configuración reutilizable
+ * Puede tener un onPress o un elemento a la derecha (como Switch)
+ */
 function SettingItem({
   icon,
   iconColor = "#4A90D9",
@@ -38,6 +56,7 @@ function SettingItem({
       onPress={onPress}
       disabled={!onPress && !rightElement}
     >
+      {/* Icono */}
       <View
         style={[
           styles.iconContainer,
@@ -50,12 +69,16 @@ function SettingItem({
           color={danger ? "#E53935" : iconColor}
         />
       </View>
+
+      {/* Texto */}
       <View style={styles.settingContent}>
         <Text style={[styles.settingTitle, danger && { color: "#E53935" }]}>
           {title}
         </Text>
         {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
       </View>
+
+      {/* Elemento derecho (switch o chevron) */}
       {rightElement || (
         onPress && <Ionicons name="chevron-forward" size={20} color="#B0BEC5" />
       )}
@@ -63,14 +86,18 @@ function SettingItem({
   );
 }
 
+// ============ COMPONENTE PRINCIPAL ============
+
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const { reminders, getStats } = useReminders();
   const stats = getStats();
 
+  // Estados para los switches (solo visuales por ahora)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
 
+  // Limpiar historial de activaciones
   const handleClearHistory = () => {
     Alert.alert(
       "Limpiar historial",
@@ -81,7 +108,7 @@ export default function SettingsScreen() {
           text: "Limpiar",
           style: "destructive",
           onPress: async () => {
-            // Aquí iría la lógica para limpiar el historial
+            // TODO: Implementar lógica para limpiar historial
             Alert.alert("Listo", "Historial limpiado.");
           },
         },
@@ -89,6 +116,7 @@ export default function SettingsScreen() {
     );
   };
 
+  // Eliminar todos los recordatorios
   const handleDeleteAll = () => {
     Alert.alert(
       "Eliminar todo",
@@ -99,7 +127,7 @@ export default function SettingsScreen() {
           text: "Eliminar todo",
           style: "destructive",
           onPress: async () => {
-            // Aquí iría la lógica para eliminar todo
+            // TODO: Implementar lógica para eliminar todo
             Alert.alert("Listo", "Todos los recordatorios han sido eliminados.");
           },
         },
@@ -107,6 +135,7 @@ export default function SettingsScreen() {
     );
   };
 
+  // Exportar datos
   const handleExportData = () => {
     Alert.alert(
       "Exportar datos",
@@ -115,6 +144,7 @@ export default function SettingsScreen() {
     );
   };
 
+  // Cerrar sesión con confirmación
   const handleLogout = () => {
     Alert.alert(
       "Cerrar sesion",
@@ -128,7 +158,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Perfil */}
+      {/* Tarjeta de perfil */}
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
           <Ionicons name="person" size={32} color="#FFFFFF" />
@@ -223,12 +253,13 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* Cerrar sesión */}
+      {/* Botón cerrar sesión */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={20} color="#E53935" />
         <Text style={styles.logoutText}>Cerrar sesion</Text>
       </TouchableOpacity>
 
+      {/* Footer */}
       <Text style={styles.footer}>
         ContextNote - Recordatorios Inteligentes{"\n"}
         Proyecto Ceutec 2026
@@ -238,6 +269,8 @@ export default function SettingsScreen() {
     </ScrollView>
   );
 }
+
+// ============ ESTILOS ============
 
 const styles = StyleSheet.create({
   container: {

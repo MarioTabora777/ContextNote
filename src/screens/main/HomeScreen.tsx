@@ -1,14 +1,25 @@
+/**
+ * HomeScreen.tsx
+ *
+ * Pantalla principal (Dashboard) que muestra un resumen de los recordatorios:
+ * - Estadísticas (total, activos, completados)
+ * - Distribución por prioridad
+ * - Próximos recordatorios por fecha
+ * - Recordatorios más activados
+ * - Recordatorios recientes
+ */
+
 import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
 } from "react-native";
 import { useReminders, Reminder } from "../../context/RemindersContext";
 import { Ionicons } from "@expo/vector-icons";
 
+// Colores asociados a cada prioridad
 const PRIORITY_COLORS = {
   high: "#E53935",
   medium: "#FB8C00",
@@ -21,6 +32,12 @@ const PRIORITY_LABELS = {
   low: "Baja",
 };
 
+// ============ COMPONENTES AUXILIARES ============
+
+/**
+ * Tarjeta de estadística individual
+ * Muestra un icono, valor numérico y etiqueta
+ */
 function StatCard({
   label,
   value,
@@ -41,14 +58,20 @@ function StatCard({
   );
 }
 
+/**
+ * Tarjeta pequeña para mostrar recordatorios en las listas
+ * Muestra título, tipo (icono), fecha si tiene, y cantidad de activaciones
+ */
 function MiniReminderCard({ reminder }: { reminder: Reminder }) {
+  // Elegimos el icono según el tipo de recordatorio
   const typeIcon =
     reminder.reminderType === "location"
       ? "location"
       : reminder.reminderType === "datetime"
       ? "time"
-      : "layers";
+      : "layers";  // "both" usa layers
 
+  // Formatea la fecha para mostrar
   const formatDate = (date?: string, time?: string) => {
     if (!date) return null;
     const d = new Date(`${date}T${time || "00:00"}`);
@@ -73,11 +96,13 @@ function MiniReminderCard({ reminder }: { reminder: Reminder }) {
           {reminder.title}
         </Text>
       </View>
+      {/* Mostrar fecha si existe */}
       {reminder.scheduledDate && (
         <Text style={styles.miniCardDate}>
           {formatDate(reminder.scheduledDate, reminder.scheduledTime)}
         </Text>
       )}
+      {/* Mostrar contador de activaciones si hay historial */}
       {reminder.triggerHistory && reminder.triggerHistory.length > 0 && (
         <Text style={styles.miniCardMeta}>
           Activado {reminder.triggerHistory.length} vez(es)
@@ -87,12 +112,18 @@ function MiniReminderCard({ reminder }: { reminder: Reminder }) {
   );
 }
 
-export default function HomeScreen() {
-  const { reminders, getStats, getTopTriggered, getUpcoming } = useReminders();
-  const stats = getStats();
-  const topTriggered = getTopTriggered(3);
-  const upcoming = getUpcoming(3);
+// ============ COMPONENTE PRINCIPAL ============
 
+export default function HomeScreen() {
+  // Obtenemos datos y funciones del contexto
+  const { reminders, getStats, getTopTriggered, getUpcoming } = useReminders();
+
+  // Calculamos estadísticas
+  const stats = getStats();
+  const topTriggered = getTopTriggered(3);  // Top 3 más activados
+  const upcoming = getUpcoming(3);          // Próximos 3 por fecha
+
+  // Recordatorios recientes (ordenados por fecha de creación)
   const recentReminders = [...reminders]
     .sort(
       (a, b) =>
@@ -102,13 +133,13 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
+      {/* Header con título de la app */}
       <View style={styles.header}>
         <Text style={styles.greeting}>ContextNote</Text>
         <Text style={styles.subtitle}>Tu asistente de recordatorios inteligentes</Text>
       </View>
 
-      {/* Stats Grid */}
+      {/* Grid de estadísticas principales */}
       <Text style={styles.sectionTitle}>Resumen</Text>
       <View style={styles.statsGrid}>
         <StatCard
@@ -131,7 +162,7 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Priority Distribution */}
+      {/* Distribución por prioridad */}
       <Text style={styles.sectionTitle}>Por Prioridad</Text>
       <View style={styles.priorityRow}>
         {(["high", "medium", "low"] as const).map((p) => (
@@ -145,7 +176,7 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {/* Upcoming Reminders */}
+      {/* Próximos por fecha (solo si hay) */}
       {upcoming.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Proximos por Fecha</Text>
@@ -155,7 +186,7 @@ export default function HomeScreen() {
         </>
       )}
 
-      {/* Top Triggered */}
+      {/* Top activados (solo si hay historial) */}
       {topTriggered.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Mas Activados</Text>
@@ -165,7 +196,7 @@ export default function HomeScreen() {
         </>
       )}
 
-      {/* Recent */}
+      {/* Recordatorios recientes o estado vacío */}
       {recentReminders.length > 0 ? (
         <>
           <Text style={styles.sectionTitle}>Recientes</Text>
@@ -186,6 +217,8 @@ export default function HomeScreen() {
     </ScrollView>
   );
 }
+
+// ============ ESTILOS ============
 
 const styles = StyleSheet.create({
   container: {

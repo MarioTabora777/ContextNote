@@ -1,3 +1,14 @@
+/**
+ * AddReminderScreen.tsx
+ *
+ * Formulario para crear un nuevo recordatorio.
+ * Permite elegir:
+ * - Tipo: por ubicación, por fecha/hora, o ambos
+ * - Prioridad: alta, media, baja
+ * - Ubicación actual (con GPS)
+ * - Fecha y hora (con DateTimePicker)
+ */
+
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -9,6 +20,7 @@ import {
   Platform,
 } from "react-native";
 import * as Location from "expo-location";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomInput from "../../components/CusstomInput";
 import CustomButton from "../../components/CustomButton";
 import {
@@ -16,14 +28,15 @@ import {
   ReminderPriority,
   ReminderType,
 } from "../../context/RemindersContext";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
+// Opciones de prioridad con sus colores
 const PRIORITY_OPTIONS: { value: ReminderPriority; label: string; color: string }[] = [
   { value: "high", label: "Alta", color: "#E53935" },
   { value: "medium", label: "Media", color: "#FB8C00" },
   { value: "low", label: "Baja", color: "#43A047" },
 ];
 
+// Opciones de tipo de recordatorio
 const TYPE_OPTIONS: { value: ReminderType; label: string; icon: string }[] = [
   { value: "location", label: "Por Ubicacion", icon: "location" },
   { value: "datetime", label: "Por Fecha/Hora", icon: "time" },
@@ -33,33 +46,39 @@ const TYPE_OPTIONS: { value: ReminderType; label: string; icon: string }[] = [
 export default function AddReminderScreen({ navigation }: any) {
   const { addReminder } = useReminders();
 
+  // ============ ESTADOS DEL FORMULARIO ============
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [radius, setRadius] = useState("300");
   const [priority, setPriority] = useState<ReminderPriority>("medium");
   const [reminderType, setReminderType] = useState<ReminderType>("location");
 
-  // Ubicación
+  // Estados para ubicación GPS
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState("Solicitando permiso...");
 
-  // Fecha y hora
+  // Estados para fecha y hora
   const [date, setDate] = useState(new Date());
   const [time, setTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  // ============ OBTENER UBICACIÓN ============
+  // Solo pedimos ubicación si el tipo lo requiere
   useEffect(() => {
-    if (reminderType === "datetime") return;
+    if (reminderType === "datetime") return;  // No necesitamos GPS para solo fecha
 
     (async () => {
       try {
+        // Pedir permiso de ubicación
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           setLocationStatus("Permiso denegado");
           return;
         }
         setLocationStatus("Obteniendo ubicacion...");
+
+        // Obtener coordenadas actuales
         const pos = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -72,7 +91,9 @@ export default function AddReminderScreen({ navigation }: any) {
     })();
   }, [reminderType]);
 
+  // ============ GUARDAR RECORDATORIO ============
   const onSave = async () => {
+    // Validar título
     if (!title.trim()) return Alert.alert("Validacion", "Escribe un titulo.");
 
     // Validar ubicación si es necesaria
@@ -87,16 +108,17 @@ export default function AddReminderScreen({ navigation }: any) {
         return Alert.alert("Validacion", "Radio minimo recomendado: 50m");
     }
 
-    // Formatear fecha/hora si es necesaria
+    // Preparar fecha/hora en formato string (solo si aplica)
     const scheduledDate =
       reminderType !== "location"
-        ? date.toISOString().split("T")[0]
+        ? date.toISOString().split("T")[0]  // "2024-03-15"
         : undefined;
     const scheduledTime =
       reminderType !== "location"
-        ? time.toTimeString().slice(0, 5)
+        ? time.toTimeString().slice(0, 5)   // "14:30"
         : undefined;
 
+    // Crear el recordatorio
     await addReminder({
       title: title.trim(),
       note: note.trim() || undefined,
@@ -114,6 +136,7 @@ export default function AddReminderScreen({ navigation }: any) {
     navigation.goBack();
   };
 
+  // ============ FORMATEADORES ============
   const formatDate = (d: Date) =>
     d.toLocaleDateString("es-HN", {
       weekday: "short",
@@ -125,11 +148,12 @@ export default function AddReminderScreen({ navigation }: any) {
   const formatTime = (t: Date) =>
     t.toLocaleTimeString("es-HN", { hour: "2-digit", minute: "2-digit" });
 
+  // ============ RENDER ============
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Nuevo recordatorio</Text>
 
-      {/* Tipo de recordatorio */}
+      {/* Selector de tipo de recordatorio */}
       <Text style={styles.label}>Tipo de recordatorio</Text>
       <View style={styles.typeRow}>
         {TYPE_OPTIONS.map((opt) => (
@@ -153,7 +177,7 @@ export default function AddReminderScreen({ navigation }: any) {
         ))}
       </View>
 
-      {/* Campos básicos */}
+      {/* Campos de texto */}
       <CustomInput
         label="Titulo"
         value={title}
@@ -169,7 +193,7 @@ export default function AddReminderScreen({ navigation }: any) {
         typeInput="text"
       />
 
-      {/* Prioridad */}
+      {/* Selector de prioridad */}
       <Text style={styles.label}>Prioridad</Text>
       <View style={styles.priorityRow}>
         {PRIORITY_OPTIONS.map((opt) => (
@@ -194,7 +218,7 @@ export default function AddReminderScreen({ navigation }: any) {
         ))}
       </View>
 
-      {/* Sección de ubicación */}
+      {/* Sección de ubicación (solo si el tipo lo requiere) */}
       {reminderType !== "datetime" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ubicacion</Text>
@@ -213,11 +237,12 @@ export default function AddReminderScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* Sección de fecha/hora */}
+      {/* Sección de fecha/hora (solo si el tipo lo requiere) */}
       {reminderType !== "location" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Fecha y Hora</Text>
 
+          {/* Botón para seleccionar fecha */}
           <TouchableOpacity
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
@@ -226,6 +251,7 @@ export default function AddReminderScreen({ navigation }: any) {
             <Text style={styles.dateButtonValue}>{formatDate(date)}</Text>
           </TouchableOpacity>
 
+          {/* Botón para seleccionar hora */}
           <TouchableOpacity
             style={styles.dateButton}
             onPress={() => setShowTimePicker(true)}
@@ -234,12 +260,13 @@ export default function AddReminderScreen({ navigation }: any) {
             <Text style={styles.dateButtonValue}>{formatTime(time)}</Text>
           </TouchableOpacity>
 
+          {/* DateTimePicker nativo (se muestra al tocar los botones) */}
           {showDatePicker && (
             <DateTimePicker
               value={date}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-              minimumDate={new Date()}
+              minimumDate={new Date()}  // No permitir fechas pasadas
               onChange={(_, selectedDate) => {
                 setShowDatePicker(Platform.OS === "ios");
                 if (selectedDate) setDate(selectedDate);
@@ -261,7 +288,7 @@ export default function AddReminderScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* Botones */}
+      {/* Botones de acción */}
       <View style={styles.buttons}>
         <CustomButton title="Guardar" onPress={onSave} />
         <View style={{ height: 10 }} />
@@ -276,6 +303,8 @@ export default function AddReminderScreen({ navigation }: any) {
     </ScrollView>
   );
 }
+
+// ============ ESTILOS ============
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 18, backgroundColor: "#F5F7FA" },

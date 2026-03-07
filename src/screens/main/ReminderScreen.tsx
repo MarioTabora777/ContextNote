@@ -1,3 +1,15 @@
+/**
+ * ReminderScreen.tsx
+ *
+ * Pantalla principal de recordatorios.
+ * Permite:
+ * - Ver todos los recordatorios
+ * - Filtrar por estado (activos, completados) o tipo (ubicación, fecha)
+ * - Verificar manualmente ubicación actual
+ * - Verificar recordatorios por fecha/hora
+ * - Crear, eliminar y completar recordatorios
+ */
+
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -15,6 +27,7 @@ import ReminderCard from "../../components/ReminderCard";
 import { distanceMeters } from "../../utils/geo";
 import { ensureNotificationsPermission, notify } from "../../utils/notifications";
 
+// Tipos de filtro disponibles
 type FilterType = "all" | "active" | "completed" | "location" | "datetime";
 
 export default function RemindersScreen({ navigation }: any) {
@@ -29,6 +42,7 @@ export default function RemindersScreen({ navigation }: any) {
   const [hasLocation, setHasLocation] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
 
+  // Verificar permiso de ubicación al montar
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -36,6 +50,9 @@ export default function RemindersScreen({ navigation }: any) {
     })();
   }, []);
 
+  // ============ VERIFICACIÓN MANUAL POR UBICACIÓN ============
+  // Simula la detección de geofencing: verifica si el usuario está
+  // dentro del radio de algún recordatorio por ubicación
   const checkLocationNow = async () => {
     if (!hasLocation)
       return Alert.alert("Permiso", "Habilita permisos de ubicacion.");
@@ -44,17 +61,19 @@ export default function RemindersScreen({ navigation }: any) {
     if (!notifOk)
       return Alert.alert("Permiso", "Habilita permisos de notificaciones.");
 
+    // Obtener ubicación actual
     const pos = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
     const { latitude, longitude } = pos.coords;
 
-    // Buscar recordatorios por ubicación activados dentro del radio
+    // Filtrar recordatorios que coincidan (dentro del radio)
     const hits = reminders.filter((r) => {
       if (!r.isEnabled || r.isCompleted) return false;
-      if (r.reminderType === "datetime") return false;
+      if (r.reminderType === "datetime") return false;  // Solo ubicación
       if (!r.latitude || !r.longitude || !r.radiusMeters) return false;
 
+      // Calcular distancia entre ubicación actual y la del recordatorio
       const d = distanceMeters(latitude, longitude, r.latitude, r.longitude);
       return d <= r.radiusMeters;
     });
@@ -66,6 +85,7 @@ export default function RemindersScreen({ navigation }: any) {
       );
     }
 
+    // Notificar cada recordatorio que coincidió
     for (const r of hits) {
       await notify("ContextNote", `Recordatorio: ${r.title}`);
       await markTriggered(r.id, "location");
@@ -74,6 +94,8 @@ export default function RemindersScreen({ navigation }: any) {
     Alert.alert("Listo", `Se activaron ${hits.length} recordatorio(s).`);
   };
 
+  // ============ VERIFICACIÓN MANUAL POR FECHA/HORA ============
+  // Verifica si hay recordatorios cuya fecha/hora ya pasó
   const checkDateTimeNow = async () => {
     const notifOk = await ensureNotificationsPermission();
     if (!notifOk)
@@ -81,16 +103,16 @@ export default function RemindersScreen({ navigation }: any) {
 
     const now = new Date();
 
-    // Buscar recordatorios por fecha que ya deberían activarse
+    // Filtrar recordatorios por fecha que ya deberían activarse
     const hits = reminders.filter((r) => {
       if (!r.isEnabled || r.isCompleted) return false;
-      if (r.reminderType === "location") return false;
+      if (r.reminderType === "location") return false;  // Solo fecha
       if (!r.scheduledDate) return false;
 
       const scheduled = new Date(
         `${r.scheduledDate}T${r.scheduledTime || "00:00"}`
       );
-      return scheduled <= now;
+      return scheduled <= now;  // Fecha/hora ya pasó
     });
 
     if (hits.length === 0) {
@@ -100,6 +122,7 @@ export default function RemindersScreen({ navigation }: any) {
       );
     }
 
+    // Notificar cada recordatorio
     for (const r of hits) {
       await notify("ContextNote", `Recordatorio: ${r.title}`);
       await markTriggered(r.id, "datetime");
@@ -108,6 +131,7 @@ export default function RemindersScreen({ navigation }: any) {
     Alert.alert("Listo", `Se activaron ${hits.length} recordatorio(s).`);
   };
 
+  // ============ FILTRADO ============
   const filteredReminders = reminders.filter((r) => {
     switch (filter) {
       case "active":
@@ -123,6 +147,7 @@ export default function RemindersScreen({ navigation }: any) {
     }
   });
 
+  // Componente de botón de filtro
   const FilterButton = ({
     type,
     label,
@@ -152,10 +177,12 @@ export default function RemindersScreen({ navigation }: any) {
     </TouchableOpacity>
   );
 
+  // ============ RENDER ============
   return (
     <View style={styles.container}>
-      {/* Botones de acción */}
+      {/* Botones de acción principales */}
       <View style={styles.actionRow}>
+        {/* Botón crear nuevo */}
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => navigation.navigate("AddReminder")}
@@ -164,6 +191,7 @@ export default function RemindersScreen({ navigation }: any) {
           <Text style={styles.addButtonText}>Nuevo</Text>
         </TouchableOpacity>
 
+        {/* Botón verificar por ubicación */}
         <TouchableOpacity
           style={styles.checkButton}
           onPress={checkLocationNow}
@@ -171,6 +199,7 @@ export default function RemindersScreen({ navigation }: any) {
           <Ionicons name="location" size={20} color="#4A90D9" />
         </TouchableOpacity>
 
+        {/* Botón verificar por fecha */}
         <TouchableOpacity
           style={styles.checkButton}
           onPress={checkDateTimeNow}
@@ -225,6 +254,8 @@ export default function RemindersScreen({ navigation }: any) {
     </View>
   );
 }
+
+// ============ ESTILOS ============
 
 const styles = StyleSheet.create({
   container: {
