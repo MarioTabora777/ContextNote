@@ -9,7 +9,7 @@ import { AuthStackParamList } from "../../navigation/AuthNavigator";
 type Props = NativeStackScreenProps<AuthStackParamList, "Register">;
 
 export default function RegisterScreen({ navigation }: Props) {
-  const { login } = useAuth();
+  const { register } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,9 +40,9 @@ export default function RegisterScreen({ navigation }: Props) {
   const onRegister = async () => {
     if (!validate()) return;
 
-    const ok = await login(email.trim());
+    const ok = await register(email.trim(), password, name.trim());
     if (ok) {
-      Alert.alert("Éxito", "Cuenta creada correctamente");
+      Alert.alert("Exito", "Cuenta creada correctamente");
     } else {
       Alert.alert("Error", "No se pudo crear la cuenta");
     }
