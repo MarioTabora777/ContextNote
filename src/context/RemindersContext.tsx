@@ -53,9 +53,11 @@ export type Reminder = {
 type RemindersContextType = {
   reminders: Reminder[];
   isLoading: boolean;
-  addReminder: (r: Omit<Reminder, "id" | "createdAt" | "triggerHistory" | "isCompleted">) => Promise<void>;
+  addReminder: (r: Omit<Reminder, "id" | "createdAt" | "triggerHistory" | "isCompleted">) => Promise<string>;
   updateReminder: (id: string, updates: Partial<Reminder>) => Promise<void>;
   deleteReminder: (id: string) => Promise<void>;
+  deleteAllReminders: () => Promise<void>;
+  clearAllHistory: () => Promise<void>;
   toggleReminder: (id: string) => Promise<void>;
   toggleCompleted: (id: string) => Promise<void>;
   markTriggered: (id: string, type: "location" | "datetime") => Promise<void>;
@@ -101,16 +103,18 @@ export const RemindersProvider = ({ children }: { children: React.ReactNode }) =
 
   // ============ FUNCIONES CRUD ============
 
-  // Crear nuevo recordatorio
-  const addReminder = async (r: Omit<Reminder, "id" | "createdAt" | "triggerHistory" | "isCompleted">) => {
+  // Crear nuevo recordatorio - devuelve el ID generado
+  const addReminder = async (r: Omit<Reminder, "id" | "createdAt" | "triggerHistory" | "isCompleted">): Promise<string> => {
+    const id = String(Date.now());
     const newR: Reminder = {
       ...r,
-      id: String(Date.now()),  // ID único basado en timestamp
+      id,
       createdAt: new Date().toISOString(),
       triggerHistory: [],
       isCompleted: false,
     };
-    await persist([newR, ...reminders]);  // Lo agregamos al inicio de la lista
+    await persist([newR, ...reminders]);
+    return id;
   };
 
   // Actualizar campos de un recordatorio existente
@@ -122,6 +126,21 @@ export const RemindersProvider = ({ children }: { children: React.ReactNode }) =
   // Eliminar recordatorio
   const deleteReminder = async (id: string) => {
     const updated = reminders.filter(r => r.id !== id);
+    await persist(updated);
+  };
+
+  // Eliminar TODOS los recordatorios
+  const deleteAllReminders = async () => {
+    await persist([]);
+  };
+
+  // Limpiar historial de activaciones de todos los recordatorios
+  const clearAllHistory = async () => {
+    const updated = reminders.map(r => ({
+      ...r,
+      triggerHistory: [],
+      lastTriggeredAt: undefined,
+    }));
     await persist(updated);
   };
 
@@ -203,6 +222,8 @@ export const RemindersProvider = ({ children }: { children: React.ReactNode }) =
       addReminder,
       updateReminder,
       deleteReminder,
+      deleteAllReminders,
+      clearAllHistory,
       toggleReminder,
       toggleCompleted,
       markTriggered,

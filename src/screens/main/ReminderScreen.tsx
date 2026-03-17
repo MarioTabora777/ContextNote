@@ -25,7 +25,7 @@ import { useReminders } from "../../context/RemindersContext";
 import CustomButton from "../../components/CustomButton";
 import ReminderCard from "../../components/ReminderCard";
 import { distanceMeters } from "../../utils/geo";
-import { ensureNotificationsPermission, notify } from "../../utils/notifications";
+import { ensureNotificationsPermission, notify, cancelNotification } from "../../utils/notifications";
 
 // Tipos de filtro disponibles
 type FilterType = "all" | "active" | "completed" | "location" | "datetime";
@@ -97,28 +97,61 @@ export default function RemindersScreen({ navigation }: any) {
   // ============ VERIFICACIÓN MANUAL POR FECHA/HORA ============
   // Verifica si hay recordatorios cuya fecha/hora ya pasó
   const checkDateTimeNow = async () => {
-    const notifOk = await ensureNotificationsPermission();
-    if (!notifOk)
-      return Alert.alert("Permiso", "Habilita permisos de notificaciones.");
-
     const now = new Date();
+
+    // Debug: mostrar recordatorios con fecha
+    const dateReminders = reminders.filter(
+      (r) => r.reminderType === "datetime" || r.reminderType === "both"
+    );
+
+    console.log("Total recordatorios:", reminders.length);
+    console.log("Recordatorios con fecha:", dateReminders.length);
+    console.log("Hora actual:", now.toISOString());
 
     // Filtrar recordatorios por fecha que ya deberían activarse
     const hits = reminders.filter((r) => {
-      if (!r.isEnabled || r.isCompleted) return false;
-      if (r.reminderType === "location") return false;  // Solo fecha
-      if (!r.scheduledDate) return false;
+      // Debe estar habilitado y no completado
+      if (!r.isEnabled || r.isCompleted) {
+        console.log(`${r.title}: descartado (disabled o completed)`);
+        return false;
+      }
 
-      const scheduled = new Date(
-        `${r.scheduledDate}T${r.scheduledTime || "00:00"}`
-      );
-      return scheduled <= now;  // Fecha/hora ya pasó
+      // Debe ser tipo datetime o both (no solo location)
+      if (r.reminderType === "location") {
+        console.log(`${r.title}: descartado (solo ubicacion)`);
+        return false;
+      }
+
+      // Debe tener fecha programada
+      if (!r.scheduledDate) {
+        console.log(`${r.title}: descartado (sin fecha)`);
+        return false;
+      }
+
+      // Crear fecha en hora local
+      const [year, month, day] = r.scheduledDate.split("-").map(Number);
+      const [hours, minutes] = (r.scheduledTime || "00:00").split(":").map(Number);
+      const scheduled = new Date(year, month - 1, day, hours, minutes);
+
+      console.log(`${r.title}: programado=${scheduled.toLocaleString()}, ahora=${now.toLocaleString()}, paso=${scheduled <= now}`);
+
+      return scheduled <= now;
     });
 
     if (hits.length === 0) {
+      // Mostrar info de debug
+      const info = dateReminders.map((r) => {
+        const [year, month, day] = (r.scheduledDate || "").split("-").map(Number);
+        const [hours, minutes] = (r.scheduledTime || "00:00").split(":").map(Number);
+        const scheduled = new Date(year, month - 1, day, hours, minutes);
+        return `- ${r.title}: ${r.scheduledDate} ${r.scheduledTime || "00:00"} (${scheduled <= now ? "YA PASO" : "pendiente"})`;
+      }).join("\n");
+
       return Alert.alert(
         "Sin coincidencias",
-        "No hay recordatorios programados para ahora."
+        dateReminders.length === 0
+          ? "No tienes recordatorios por fecha."
+          : `Recordatorios por fecha:\n${info}`
       );
     }
 
@@ -129,6 +162,12 @@ export default function RemindersScreen({ navigation }: any) {
     }
 
     Alert.alert("Listo", `Se activaron ${hits.length} recordatorio(s).`);
+  };
+
+  // ============ ELIMINAR RECORDATORIO ============
+  const handleDelete = async (id: string) => {
+    await cancelNotification(id);
+    await deleteReminder(id);
   };
 
   // ============ FILTRADO ============
@@ -232,7 +271,8 @@ export default function RemindersScreen({ navigation }: any) {
           <ReminderCard
             reminder={item}
             onToggle={() => toggleReminder(item.id)}
-            onDelete={() => deleteReminder(item.id)}
+            onDelete={() => handleDelete(item.id)}
+            onEdit={() => navigation.navigate("AddReminder", { reminder: item })}
             onToggleCompleted={() => toggleCompleted(item.id)}
           />
         )}

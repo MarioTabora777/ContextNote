@@ -40,6 +40,7 @@ type Props = {
   reminder: Reminder;
   onToggle: () => void;           // Activar/desactivar
   onDelete?: () => void;          // Eliminar (opcional)
+  onEdit?: () => void;            // Editar (opcional)
   onToggleCompleted?: () => void; // Marcar completado (opcional)
 };
 
@@ -47,6 +48,7 @@ export default function ReminderCard({
   reminder,
   onToggle,
   onDelete,
+  onEdit,
   onToggleCompleted,
 }: Props) {
   // Formatea fecha para mostrar
@@ -112,6 +114,13 @@ export default function ReminderCard({
               {PRIORITY_LABELS[reminder.priority || "medium"]}
             </Text>
           </View>
+
+          {/* Botón editar */}
+          {onEdit && (
+            <TouchableOpacity onPress={onEdit} style={styles.editBtn}>
+              <Ionicons name="pencil-outline" size={18} color="#4A90D9" />
+            </TouchableOpacity>
+          )}
 
           {/* Botón eliminar */}
           {onDelete && (
@@ -249,6 +258,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  editBtn: {
+    padding: 4,
   },
   deleteBtn: {
     padding: 4,

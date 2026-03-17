@@ -24,6 +24,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import { useReminders } from "../../context/RemindersContext";
+import { cancelAllNotifications } from "../../utils/notifications";
 
 // ============ COMPONENTE AUXILIAR ============
 
@@ -90,7 +91,7 @@ function SettingItem({
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
-  const { reminders, getStats } = useReminders();
+  const { reminders, getStats, deleteAllReminders, clearAllHistory } = useReminders();
   const stats = getStats();
 
   // Estados para los switches (solo visuales por ahora)
@@ -99,6 +100,10 @@ export default function SettingsScreen() {
 
   // Limpiar historial de activaciones
   const handleClearHistory = () => {
+    if (reminders.length === 0) {
+      return Alert.alert("Sin datos", "No hay recordatorios para limpiar.");
+    }
+
     Alert.alert(
       "Limpiar historial",
       "Esto eliminara el historial de activaciones de todos tus recordatorios. Los recordatorios no se eliminaran.",
@@ -108,8 +113,8 @@ export default function SettingsScreen() {
           text: "Limpiar",
           style: "destructive",
           onPress: async () => {
-            // TODO: Implementar lógica para limpiar historial
-            Alert.alert("Listo", "Historial limpiado.");
+            await clearAllHistory();
+            Alert.alert("Listo", "Historial de activaciones limpiado.");
           },
         },
       ]
@@ -118,16 +123,21 @@ export default function SettingsScreen() {
 
   // Eliminar todos los recordatorios
   const handleDeleteAll = () => {
+    if (reminders.length === 0) {
+      return Alert.alert("Sin datos", "No hay recordatorios para eliminar.");
+    }
+
     Alert.alert(
       "Eliminar todo",
-      "Esto eliminara TODOS tus recordatorios. Esta accion no se puede deshacer.",
+      `Esto eliminara ${reminders.length} recordatorio(s). Esta accion no se puede deshacer.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
           text: "Eliminar todo",
           style: "destructive",
           onPress: async () => {
-            // TODO: Implementar lógica para eliminar todo
+            await cancelAllNotifications();
+            await deleteAllReminders();
             Alert.alert("Listo", "Todos los recordatorios han sido eliminados.");
           },
         },

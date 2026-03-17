@@ -1,7 +1,7 @@
 /**
  * AddReminderScreen.tsx
  *
- * Formulario para crear un nuevo recordatorio.
+ * Formulario para crear o editar un recordatorio.
  * Permite elegir:
  * - Tipo: por ubicación, por fecha/hora, o ambos
  * - Prioridad: alta, media, baja
@@ -9,7 +9,7 @@
  * - Fecha y hora (con DateTimePicker)
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -19,15 +19,17 @@ import {
   TouchableOpacity,
   Platform,
 } from "react-native";
-import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomInput from "../../components/CusstomInput";
 import CustomButton from "../../components/CustomButton";
+import LocationPicker from "../../components/LocationPicker";
 import {
   useReminders,
   ReminderPriority,
   ReminderType,
+  Reminder,
 } from "../../context/RemindersContext";
+import { scheduleNotification, ensureNotificationsPermission, cancelNotification } from "../../utils/notifications";
 
 // Opciones de prioridad con sus colores
 const PRIORITY_OPTIONS: { value: ReminderPriority; label: string; color: string }[] = [
@@ -43,53 +45,45 @@ const TYPE_OPTIONS: { value: ReminderType; label: string; icon: string }[] = [
   { value: "both", label: "Ambos", icon: "layers" },
 ];
 
-export default function AddReminderScreen({ navigation }: any) {
-  const { addReminder } = useReminders();
+export default function AddReminderScreen({ navigation, route }: any) {
+  const { addReminder, updateReminder } = useReminders();
+
+  // Obtener recordatorio existente si estamos en modo edición
+  const existingReminder: Reminder | undefined = route.params?.reminder;
+  const isEditing = !!existingReminder;
 
   // ============ ESTADOS DEL FORMULARIO ============
-  const [title, setTitle] = useState("");
-  const [note, setNote] = useState("");
-  const [radius, setRadius] = useState("300");
-  const [priority, setPriority] = useState<ReminderPriority>("medium");
-  const [reminderType, setReminderType] = useState<ReminderType>("location");
+  const [title, setTitle] = useState(existingReminder?.title || "");
+  const [note, setNote] = useState(existingReminder?.note || "");
+  const [radius, setRadius] = useState(String(existingReminder?.radiusMeters || 300));
+  const [priority, setPriority] = useState<ReminderPriority>(existingReminder?.priority || "medium");
+  const [reminderType, setReminderType] = useState<ReminderType>(existingReminder?.reminderType || "location");
 
   // Estados para ubicación GPS
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationStatus, setLocationStatus] = useState("Solicitando permiso...");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    existingReminder?.latitude && existingReminder?.longitude
+      ? { lat: existingReminder.latitude, lng: existingReminder.longitude }
+      : null
+  );
 
   // Estados para fecha y hora
-  const [date, setDate] = useState(new Date());
-  const [time, setTime] = useState(new Date());
+  const [date, setDate] = useState(() => {
+    if (existingReminder?.scheduledDate) {
+      return new Date(`${existingReminder.scheduledDate}T00:00`);
+    }
+    return new Date();
+  });
+  const [time, setTime] = useState(() => {
+    if (existingReminder?.scheduledTime) {
+      const [hours, minutes] = existingReminder.scheduledTime.split(":");
+      const t = new Date();
+      t.setHours(parseInt(hours), parseInt(minutes));
+      return t;
+    }
+    return new Date();
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-
-  // ============ OBTENER UBICACIÓN ============
-  // Solo pedimos ubicación si el tipo lo requiere
-  useEffect(() => {
-    if (reminderType === "datetime") return;  // No necesitamos GPS para solo fecha
-
-    (async () => {
-      try {
-        // Pedir permiso de ubicación
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          setLocationStatus("Permiso denegado");
-          return;
-        }
-        setLocationStatus("Obteniendo ubicacion...");
-
-        // Obtener coordenadas actuales
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationStatus("Ubicacion obtenida");
-      } catch (error) {
-        setLocationStatus("Error al obtener ubicacion");
-        console.log("Error ubicación:", error);
-      }
-    })();
-  }, [reminderType]);
 
   // ============ GUARDAR RECORDATORIO ============
   const onSave = async () => {
@@ -109,29 +103,77 @@ export default function AddReminderScreen({ navigation }: any) {
     }
 
     // Preparar fecha/hora en formato string (solo si aplica)
+    // Usamos formato local para evitar problemas de zona horaria
     const scheduledDate =
       reminderType !== "location"
-        ? date.toISOString().split("T")[0]  // "2024-03-15"
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
         : undefined;
     const scheduledTime =
       reminderType !== "location"
-        ? time.toTimeString().slice(0, 5)   // "14:30"
+        ? time.toTimeString().slice(0, 5)
         : undefined;
 
-    // Crear el recordatorio
-    await addReminder({
-      title: title.trim(),
-      note: note.trim() || undefined,
-      latitude: reminderType !== "datetime" ? coords?.lat : undefined,
-      longitude: reminderType !== "datetime" ? coords?.lng : undefined,
-      radiusMeters: reminderType !== "datetime" ? Number(radius) : undefined,
-      scheduledDate,
-      scheduledTime,
-      priority,
-      reminderType,
-      isEnabled: true,
-      lastTriggeredAt: undefined,
-    });
+    if (isEditing && existingReminder) {
+      // MODO EDICIÓN: actualizar recordatorio existente
+      await updateReminder(existingReminder.id, {
+        title: title.trim(),
+        note: note.trim() || undefined,
+        latitude: reminderType !== "datetime" ? coords?.lat : undefined,
+        longitude: reminderType !== "datetime" ? coords?.lng : undefined,
+        radiusMeters: reminderType !== "datetime" ? Number(radius) : undefined,
+        scheduledDate,
+        scheduledTime,
+        priority,
+        reminderType,
+      });
+
+      // Reprogramar notificación si tiene fecha/hora
+      if (scheduledDate && scheduledTime && reminderType !== "location") {
+        await cancelNotification(existingReminder.id);
+        const hasPermission = await ensureNotificationsPermission();
+        if (hasPermission) {
+          await scheduleNotification(
+            existingReminder.id,
+            "ContextNote - Recordatorio",
+            title.trim(),
+            scheduledDate,
+            scheduledTime
+          );
+        }
+      } else {
+        // Si ya no tiene fecha, cancelar notificación existente
+        await cancelNotification(existingReminder.id);
+      }
+    } else {
+      // MODO CREAR: nuevo recordatorio
+      const reminderId = await addReminder({
+        title: title.trim(),
+        note: note.trim() || undefined,
+        latitude: reminderType !== "datetime" ? coords?.lat : undefined,
+        longitude: reminderType !== "datetime" ? coords?.lng : undefined,
+        radiusMeters: reminderType !== "datetime" ? Number(radius) : undefined,
+        scheduledDate,
+        scheduledTime,
+        priority,
+        reminderType,
+        isEnabled: true,
+        lastTriggeredAt: undefined,
+      });
+
+      // Si tiene fecha/hora, programar notificación
+      if (scheduledDate && scheduledTime && reminderType !== "location") {
+        const hasPermission = await ensureNotificationsPermission();
+        if (hasPermission) {
+          await scheduleNotification(
+            reminderId,
+            "ContextNote - Recordatorio",
+            title.trim(),
+            scheduledDate,
+            scheduledTime
+          );
+        }
+      }
+    }
 
     navigation.goBack();
   };
@@ -151,7 +193,9 @@ export default function AddReminderScreen({ navigation }: any) {
   // ============ RENDER ============
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Nuevo recordatorio</Text>
+      <Text style={styles.title}>
+        {isEditing ? "Editar recordatorio" : "Nuevo recordatorio"}
+      </Text>
 
       {/* Selector de tipo de recordatorio */}
       <Text style={styles.label}>Tipo de recordatorio</Text>
@@ -229,11 +273,11 @@ export default function AddReminderScreen({ navigation }: any) {
             placeholder="300"
             typeInput="numeric"
           />
-          <Text style={styles.coords}>
-            {coords
-              ? `Lat: ${coords.lat.toFixed(5)}, Lng: ${coords.lng.toFixed(5)}`
-              : locationStatus}
-          </Text>
+          <LocationPicker
+            initialCoords={coords}
+            radius={Number(radius) || 300}
+            onLocationSelect={(newCoords) => setCoords(newCoords)}
+          />
         </View>
       )}
 
