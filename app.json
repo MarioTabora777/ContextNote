@@ -20,6 +20,11 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBmitm9tOU2qWglE3QRRrQEk3c8EcLXMcI"
+        }
       }
     },
     "web": {

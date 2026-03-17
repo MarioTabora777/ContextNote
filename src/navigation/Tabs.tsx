@@ -11,6 +11,7 @@
 
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HomeScreen from "../screens/main/HomeScreen";
 import RemindersScreen from "../screens/main/ReminderScreen";
 import HistoryScreen from "../screens/main/HistoryScreen";
@@ -27,6 +28,8 @@ export type MainTabParamList = {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       id="MainTabs"
@@ -35,13 +38,13 @@ export default function MainTabs() {
         // Colores de los tabs
         tabBarActiveTintColor: "#4A90D9",
         tabBarInactiveTintColor: "#90A4AE",
-        // Estilos de la barra de tabs
+        // Estilos de la barra de tabs - usar insets para evitar botones de Android
         tabBarStyle: {
           backgroundColor: "#FFFFFF",
           borderTopColor: "#E0E0E0",
-          paddingBottom: 5,
+          paddingBottom: Math.max(insets.bottom, 10),
           paddingTop: 5,
-          height: 60,
+          height: 60 + Math.max(insets.bottom, 10),
         },
         tabBarLabelStyle: {
           fontSize: 11,

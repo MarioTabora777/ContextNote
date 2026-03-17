@@ -1,29 +1,42 @@
 /**
  * LocationPicker.tsx
  *
- * Componente que muestra un mapa para seleccionar ubicación.
- * Permite:
- * - Ver ubicación actual
- * - Tocar para seleccionar otra ubicación
- * - Ver el radio del recordatorio
+ * Componente con:
+ * - Buscador de direcciones con autocompletado (Google Places)
+ * - Imagen estatica de Google Maps que se actualiza al seleccionar
+ * - Muestra el radio del recordatorio
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
+  ScrollView,
+  Image,
+  Keyboard,
 } from "react-native";
-import MapView, { Marker, Circle, MapPressEvent } from "react-native-maps";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
+
+const GOOGLE_API_KEY = "AIzaSyBmitm9tOU2qWglE3QRRrQEk3c8EcLXMcI";
 
 type Props = {
   initialCoords?: { lat: number; lng: number } | null;
   radius: number;
   onLocationSelect: (coords: { lat: number; lng: number }) => void;
+};
+
+type PlacePrediction = {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
 };
 
 export default function LocationPicker({
@@ -36,15 +49,24 @@ export default function LocationPicker({
     lng: number;
   } | null>(initialCoords || null);
 
-  const [currentLocation, setCurrentLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Obtener ubicación actual al montar
+  // Estados para busqueda
+  const [searchText, setSearchText] = useState("");
+  const [suggestions, setSuggestions] = useState<PlacePrediction[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const sessionToken = useRef(generateSessionToken());
+
+  // Generar token de sesion para Google Places
+  function generateSessionToken() {
+    return Math.random().toString(36).substring(2, 15);
+  }
+
+  // Obtener ubicacion actual al montar
   useEffect(() => {
     (async () => {
       try {
@@ -64,8 +86,6 @@ export default function LocationPicker({
           lng: pos.coords.longitude,
         };
 
-        setCurrentLocation(coords);
-
         // Si no hay coordenadas iniciales, usar la actual
         if (!selectedCoords) {
           setSelectedCoords(coords);
@@ -80,23 +100,123 @@ export default function LocationPicker({
     })();
   }, []);
 
-  // Manejar tap en el mapa
-  const handleMapPress = (event: MapPressEvent) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    const coords = { lat: latitude, lng: longitude };
-    setSelectedCoords(coords);
-    onLocationSelect(coords);
+  // Buscar direcciones con Google Places Autocomplete (limitado a Honduras, prioriza SPS)
+  const searchAddresses = useCallback(async (query: string) => {
+    if (query.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      // Coordenadas de San Pedro Sula para priorizar resultados cercanos
+      const spsLat = 15.5049;
+      const spsLng = -88.0252;
+
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+          query
+        )}&key=${GOOGLE_API_KEY}&sessiontoken=${sessionToken.current}&language=es&components=country:hn&location=${spsLat},${spsLng}&radius=50000`
+      );
+      const data = await response.json();
+
+      if (data.status === "OK" && data.predictions) {
+        setSuggestions(data.predictions);
+        setShowSuggestions(data.predictions.length > 0);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (err) {
+      console.log("Error buscando direcciones:", err);
+      setSuggestions([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  // Debounce para busqueda
+  const handleSearchChange = (text: string) => {
+    setSearchText(text);
+
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    searchTimeout.current = setTimeout(() => {
+      searchAddresses(text);
+    }, 400);
   };
 
-  // Centrar en ubicación actual
-  const centerOnCurrentLocation = () => {
-    if (currentLocation) {
-      setSelectedCoords(currentLocation);
-      onLocationSelect(currentLocation);
+  // Obtener coordenadas de un place_id
+  const getPlaceDetails = async (placeId: string): Promise<{ lat: number; lng: number } | null> => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry&key=${GOOGLE_API_KEY}&sessiontoken=${sessionToken.current}`
+      );
+      const data = await response.json();
+
+      if (data.status === "OK" && data.result?.geometry?.location) {
+        // Generar nuevo token para la proxima sesion
+        sessionToken.current = generateSessionToken();
+        return {
+          lat: data.result.geometry.location.lat,
+          lng: data.result.geometry.location.lng,
+        };
+      }
+      return null;
+    } catch (err) {
+      console.log("Error obteniendo detalles:", err);
+      return null;
     }
   };
 
-  if (loading) {
+  // Seleccionar una sugerencia
+  const selectSuggestion = async (suggestion: PlacePrediction) => {
+    setSearchText(suggestion.structured_formatting.main_text);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    Keyboard.dismiss();
+
+    // Obtener coordenadas del lugar seleccionado
+    const coords = await getPlaceDetails(suggestion.place_id);
+    if (coords) {
+      setSelectedCoords(coords);
+      onLocationSelect(coords);
+    }
+  };
+
+  // Usar ubicacion actual
+  const useCurrentLocation = async () => {
+    setLoading(true);
+    try {
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const coords = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      };
+      setSelectedCoords(coords);
+      onLocationSelect(coords);
+      setSearchText("");
+      setShowSuggestions(false);
+    } catch (err) {
+      setError("Error obteniendo ubicacion");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Generar URL de imagen estatica de Google Maps
+  const getMapImageUrl = () => {
+    if (!selectedCoords) return null;
+    const zoom = 16;
+    return `https://maps.googleapis.com/maps/api/staticmap?center=${selectedCoords.lat},${selectedCoords.lng}&zoom=${zoom}&size=600x300&scale=2&maptype=roadmap&markers=color:red%7C${selectedCoords.lat},${selectedCoords.lng}&key=${GOOGLE_API_KEY}`;
+  };
+
+  if (loading && !selectedCoords) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4A90D9" />
@@ -105,7 +225,7 @@ export default function LocationPicker({
     );
   }
 
-  if (error) {
+  if (error && !selectedCoords) {
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="location-outline" size={40} color="#E53935" />
@@ -114,88 +234,192 @@ export default function LocationPicker({
     );
   }
 
-  const region = selectedCoords
-    ? {
-        latitude: selectedCoords.lat,
-        longitude: selectedCoords.lng,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }
-    : {
-        latitude: 0,
-        longitude: 0,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
+  const mapImageUrl = getMapImageUrl();
 
   return (
     <View style={styles.container}>
-      <MapView
-        style={styles.map}
-        initialRegion={region}
-        onPress={handleMapPress}
-        showsUserLocation
-        showsMyLocationButton={false}
-      >
-        {/* Marcador de ubicación seleccionada */}
-        {selectedCoords && (
-          <>
-            <Marker
-              coordinate={{
-                latitude: selectedCoords.lat,
-                longitude: selectedCoords.lng,
-              }}
-              pinColor="#4A90D9"
-            />
-            {/* Círculo que muestra el radio */}
-            <Circle
-              center={{
-                latitude: selectedCoords.lat,
-                longitude: selectedCoords.lng,
-              }}
-              radius={radius}
-              fillColor="rgba(74, 144, 217, 0.2)"
-              strokeColor="rgba(74, 144, 217, 0.5)"
-              strokeWidth={2}
-            />
-          </>
+      {/* Buscador de direcciones */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#78909C" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar direccion en Honduras..."
+          placeholderTextColor="#90A4AE"
+          value={searchText}
+          onChangeText={handleSearchChange}
+          onFocus={() => {
+            if (suggestions.length > 0) setShowSuggestions(true);
+          }}
+        />
+        {searching && (
+          <ActivityIndicator size="small" color="#4A90D9" style={styles.searchSpinner} />
         )}
-      </MapView>
-
-      {/* Botón para centrar en ubicación actual */}
-      <TouchableOpacity
-        style={styles.myLocationButton}
-        onPress={centerOnCurrentLocation}
-      >
-        <Ionicons name="locate" size={24} color="#4A90D9" />
-      </TouchableOpacity>
-
-      {/* Info de ubicación seleccionada */}
-      <View style={styles.infoBox}>
-        <Ionicons name="location" size={16} color="#4A90D9" />
-        <Text style={styles.infoText}>
-          {selectedCoords
-            ? `${selectedCoords.lat.toFixed(5)}, ${selectedCoords.lng.toFixed(5)}`
-            : "Toca el mapa para seleccionar"}
-        </Text>
       </View>
 
-      <Text style={styles.hint}>
-        Toca en el mapa para seleccionar una ubicacion
-      </Text>
+      {/* Lista de sugerencias */}
+      {showSuggestions && suggestions.length > 0 && (
+        <View style={styles.suggestionsContainer}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            {suggestions.map((item) => (
+              <TouchableOpacity
+                key={item.place_id}
+                style={styles.suggestionItem}
+                onPress={() => selectSuggestion(item)}
+              >
+                <Ionicons name="location-outline" size={18} color="#4A90D9" />
+                <View style={styles.suggestionTextContainer}>
+                  <Text style={styles.suggestionMainText}>
+                    {item.structured_formatting.main_text}
+                  </Text>
+                  <Text style={styles.suggestionSecondaryText} numberOfLines={1}>
+                    {item.structured_formatting.secondary_text}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Imagen del mapa de Google */}
+      <View style={styles.mapContainer}>
+        {mapImageUrl ? (
+          <Image
+            source={{ uri: mapImageUrl }}
+            style={styles.mapImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <Ionicons name="map-outline" size={40} color="#B0BEC5" />
+            <Text style={styles.mapPlaceholderText}>Selecciona una ubicacion</Text>
+          </View>
+        )}
+
+        {/* Indicador de radio */}
+        {selectedCoords && (
+          <View style={styles.radiusIndicator}>
+            <Text style={styles.radiusText}>Radio: {radius}m</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Info de ubicacion seleccionada + boton ubicacion actual */}
+      <View style={styles.bottomRow}>
+        <View style={styles.infoBox}>
+          <Ionicons name="location" size={16} color="#4A90D9" />
+          <Text style={styles.infoText}>
+            {selectedCoords
+              ? `${selectedCoords.lat.toFixed(5)}, ${selectedCoords.lng.toFixed(5)}`
+              : "Busca una direccion"}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={useCurrentLocation} style={styles.currentLocationBtn}>
+          <Ionicons name="navigate" size={16} color="#78909C" />
+          <Text style={styles.currentLocationText}>Usar actual</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    height: 250,
-    borderRadius: 12,
-    overflow: "hidden",
     marginTop: 8,
   },
-  map: {
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    marginBottom: 8,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
     flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#263238",
+  },
+  searchSpinner: {
+    marginRight: 8,
+  },
+  suggestionsContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    maxHeight: 200,
+    marginBottom: 8,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5F5F5",
+    gap: 10,
+  },
+  suggestionTextContainer: {
+    flex: 1,
+  },
+  suggestionMainText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#263238",
+  },
+  suggestionSecondaryText: {
+    fontSize: 13,
+    color: "#78909C",
+    marginTop: 2,
+  },
+  mapContainer: {
+    height: 200,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#ECEFF1",
+    position: "relative",
+  },
+  mapImage: {
+    width: "100%",
+    height: "100%",
+  },
+  mapPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapPlaceholderText: {
+    marginTop: 8,
+    color: "#90A4AE",
+    fontSize: 14,
+  },
+  radiusIndicator: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(74, 144, 217, 0.9)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  radiusText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
   },
   loadingContainer: {
     height: 200,
@@ -219,45 +443,40 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: "#E53935",
   },
-  myLocationButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "#FFFFFF",
-    padding: 10,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  bottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    gap: 8,
   },
   infoBox: {
-    position: "absolute",
-    bottom: 10,
-    left: 10,
-    right: 10,
+    flex: 1,
     backgroundColor: "#FFFFFF",
     padding: 10,
     borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
   },
   infoText: {
     color: "#263238",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
   },
-  hint: {
-    textAlign: "center",
+  currentLocationBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+  },
+  currentLocationText: {
     color: "#78909C",
     fontSize: 12,
-    marginTop: 8,
+    fontWeight: "500",
   },
 });
