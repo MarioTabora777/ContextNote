@@ -11,7 +11,7 @@ import { Alert, AppState } from "react-native";
 import { useReminders } from "../context/RemindersContext";
 
 export default function ReminderChecker() {
-  const { reminders, markTriggered } = useReminders();
+  const { reminders, markTriggered, toggleCompleted } = useReminders();
   const appState = useRef(AppState.currentState);
   const lastCheck = useRef<string[]>([]); // IDs ya notificados
 
