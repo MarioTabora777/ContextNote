@@ -11,6 +11,16 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4A90D9",
+          "sounds": []
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -25,7 +35,8 @@
         "googleMaps": {
           "apiKey": "AIzaSyBmitm9tOU2qWglE3QRRrQEk3c8EcLXMcI"
         }
-      }
+      },
+      "package": "com.anonymous.ContextNote"
     },
     "web": {
       "favicon": "./assets/favicon.png"
