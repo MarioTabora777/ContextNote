@@ -16,7 +16,8 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
-import { useReminders, Reminder } from "../../context/RemindersContext";
+import { useReminders } from "../../store/hooks";
+import { Reminder } from "../../store/remindersSlice";
 import { Ionicons } from "@expo/vector-icons";
 
 // Colores asociados a cada prioridad

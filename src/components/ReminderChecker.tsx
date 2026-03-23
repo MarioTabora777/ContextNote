@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
-import { useReminders } from "../context/RemindersContext";
+import { useReminders } from "../store/hooks";
 import {
   notify,
   setupNotificationChannel,

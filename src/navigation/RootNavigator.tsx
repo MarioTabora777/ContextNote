@@ -1,6 +1,6 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { ActivityIndicator, View } from "react-native";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../store/hooks";
 import AuthNavigator from "./AuthNavigator";
 import MainStack from "./MainStack";
 

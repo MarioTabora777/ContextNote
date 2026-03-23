@@ -2,7 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabs from "../navigation/Tabs";
 import AddReminderScreen from "../screens/main/AddReminderScreen";
 import ReminderChecker from "../components/ReminderChecker";
-import { Reminder } from "../context/RemindersContext";
+import { Reminder } from "../store/remindersSlice";
 
 export type MainStackParamList = {
   Tabs: undefined;

@@ -16,7 +16,7 @@ import {
   SectionList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useReminders } from "../../context/RemindersContext";
+import { useReminders } from "../../store/hooks";
 
 // Tipo para cada item del historial
 type HistoryItem = {
