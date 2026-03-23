@@ -48,7 +48,11 @@ export const useReminders = () => {
 
 export const RemindersProvider = ({ children }: { children: React.ReactNode }) => {
   const dispatch = useAppDispatch();
-  const reminders = useAppSelector(state => state.reminders.reminders);
+  // Leyendo estado global desde Redux Store
+  const reminders = useAppSelector(state => {
+    console.log("[REDUX SELECTOR] Leyendo estado - Total recordatorios:", state.reminders.reminders.length);
+    return state.reminders.reminders;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   // Función auxiliar: guarda en Redux Y en AsyncStorage
@@ -57,16 +61,23 @@ export const RemindersProvider = ({ children }: { children: React.ReactNode }) =
     await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(data));
   };
 
-  // Al montar el componente, cargamos los recordatorios guardados
+  // Al montar el componente, cargamos los recordatorios guardados en Redux
   useEffect(() => {
     (async () => {
       try {
+        console.log("[CONTEXT] Cargando recordatorios desde AsyncStorage...");
         const raw = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
         if (raw) {
-          dispatch(remindersActions.setReminders(JSON.parse(raw)));
+          const data = JSON.parse(raw);
+          console.log("[CONTEXT] Datos encontrados:", data.length, "recordatorios");
+          console.log("[CONTEXT] Enviando dispatch a Redux Store...");
+          dispatch(remindersActions.setReminders(data));
+        } else {
+          console.log("[CONTEXT] No hay datos guardados, iniciando vacio");
         }
       } finally {
         setIsLoading(false);
+        console.log("[CONTEXT] Estado de Redux actualizado correctamente");
       }
     })();
   }, [dispatch]);
