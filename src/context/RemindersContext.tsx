@@ -2,52 +2,19 @@
  * RemindersContext.tsx
  *
  * Contexto global para manejar los recordatorios de la app.
- * Usa AsyncStorage para persistir los datos localmente.
+ * Usa Redux para el estado y AsyncStorage para persistir los datos.
  * Todas las pantallas acceden a los recordatorios a través de useReminders().
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../storage/keys";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import * as remindersActions from "../store/slices/remindersSlice";
 
-// ============ TIPOS ============
-
-// Prioridad: afecta el color visual de la tarjeta
-export type ReminderPriority = "high" | "medium" | "low";
-
-// Tipo de recordatorio: define si se activa por ubicación, fecha/hora, o ambos
-export type ReminderType = "location" | "datetime" | "both";
-
-// Registro de cada vez que se activa un recordatorio (para el historial)
-export type TriggerRecord = {
-  triggeredAt: string;  // Fecha ISO cuando se activó
-  type: "location" | "datetime";  // Cómo se activó
-};
-
-// Estructura principal de un recordatorio
-export type Reminder = {
-  id: string;
-  title: string;
-  note?: string;
-
-  // Campos para recordatorios por UBICACIÓN (opcionales si es solo por fecha)
-  latitude?: number;
-  longitude?: number;
-  radiusMeters?: number;  // Radio en metros para detectar cercanía
-
-  // Campos para recordatorios por FECHA/HORA (opcionales si es solo por ubicación)
-  scheduledDate?: string;  // Formato: "2024-03-15"
-  scheduledTime?: string;  // Formato: "14:30"
-
-  // Configuración general
-  priority: ReminderPriority;
-  reminderType: ReminderType;
-  isEnabled: boolean;      // Si está activo (switch on/off)
-  isCompleted: boolean;    // Si ya se marcó como completado
-  createdAt: string;
-  lastTriggeredAt?: string;
-  triggerHistory: TriggerRecord[];  // Historial de todas las activaciones
-};
+// Re-exportar tipos desde el slice de Redux
+export type { Reminder, ReminderPriority, ReminderType, TriggerRecord } from "../store/slices/remindersSlice";
+import { Reminder, ReminderPriority } from "../store/slices/remindersSlice";
 
 // Funciones disponibles en el contexto
 type RemindersContextType = {
@@ -80,12 +47,13 @@ export const useReminders = () => {
 // ============ PROVIDER ============
 
 export const RemindersProvider = ({ children }: { children: React.ReactNode }) => {
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const dispatch = useAppDispatch();
+  const reminders = useAppSelector(state => state.reminders.reminders);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Función auxiliar: guarda en estado Y en AsyncStorage
+  // Función auxiliar: guarda en Redux Y en AsyncStorage
   const persist = async (data: Reminder[]) => {
-    setReminders(data);
+    dispatch(remindersActions.setReminders(data));
     await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(data));
   };
 
@@ -94,14 +62,16 @@ export const RemindersProvider = ({ children }: { children: React.ReactNode }) =
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
-        if (raw) setReminders(JSON.parse(raw));
+        if (raw) {
+          dispatch(remindersActions.setReminders(JSON.parse(raw)));
+        }
       } finally {
         setIsLoading(false);
       }
     })();
-  }, []);
+  }, [dispatch]);
 
-  // ============ FUNCIONES CRUD ============
+  // ============ FUNCIONES CRUD (usando Redux) ============
 
   // Crear nuevo recordatorio - devuelve el ID generado
   const addReminder = async (r: Omit<Reminder, "id" | "createdAt" | "triggerHistory" | "isCompleted">): Promise<string> => {
@@ -113,63 +83,74 @@ export const RemindersProvider = ({ children }: { children: React.ReactNode }) =
       triggerHistory: [],
       isCompleted: false,
     };
-    await persist([newR, ...reminders]);
+    dispatch(remindersActions.addReminder(newR));
+    const updated = [newR, ...reminders];
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
     return id;
   };
 
   // Actualizar campos de un recordatorio existente
   const updateReminder = async (id: string, updates: Partial<Reminder>) => {
-    const updated = reminders.map(r => (r.id === id ? { ...r, ...updates } : r));
-    await persist(updated);
+    const reminder = reminders.find(r => r.id === id);
+    if (reminder) {
+      dispatch(remindersActions.updateReminder({ ...reminder, ...updates }));
+      const updated = reminders.map(r => (r.id === id ? { ...r, ...updates } : r));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
+    }
   };
 
   // Eliminar recordatorio
   const deleteReminder = async (id: string) => {
+    dispatch(remindersActions.deleteReminder(id));
     const updated = reminders.filter(r => r.id !== id);
-    await persist(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
   };
 
   // Eliminar TODOS los recordatorios
   const deleteAllReminders = async () => {
-    await persist([]);
+    dispatch(remindersActions.clearReminders());
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify([]));
   };
 
   // Limpiar historial de activaciones de todos los recordatorios
   const clearAllHistory = async () => {
+    dispatch(remindersActions.clearAllHistory());
     const updated = reminders.map(r => ({
       ...r,
       triggerHistory: [],
       lastTriggeredAt: undefined,
     }));
-    await persist(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
   };
 
   // Activar/desactivar recordatorio (switch)
   const toggleReminder = async (id: string) => {
+    dispatch(remindersActions.toggleReminder(id));
     const updated = reminders.map(r => (r.id === id ? { ...r, isEnabled: !r.isEnabled } : r));
-    await persist(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
   };
 
   // Marcar como completado/pendiente
   const toggleCompleted = async (id: string) => {
+    dispatch(remindersActions.toggleCompleted(id));
     const updated = reminders.map(r => (r.id === id ? { ...r, isCompleted: !r.isCompleted } : r));
-    await persist(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
   };
 
   // Registrar que el recordatorio se activó (para el historial)
   const markTriggered = async (id: string, type: "location" | "datetime") => {
+    dispatch(remindersActions.markTriggered({ id, type }));
     const now = new Date().toISOString();
     const updated = reminders.map(r =>
       r.id === id
         ? {
             ...r,
             lastTriggeredAt: now,
-            // Agregamos al historial de activaciones
             triggerHistory: [...(r.triggerHistory || []), { triggeredAt: now, type }],
           }
         : r
     );
-    await persist(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
   };
 
   // ============ FUNCIONES DE ESTADÍSTICAS (para el Dashboard) ============
