@@ -1,18 +1,19 @@
-import React from "react";
-import { Provider } from "react-redux";
-import { store } from "./src/store";
 import React, { useEffect } from "react";
 import { Provider } from "react-redux";
 import { store, useAppDispatch } from "./src/store";
 import { loadUser } from "./src/store/authSlice";
 import { loadReminders } from "./src/store/remindersSlice";
 import RootNavigator from "./src/navigation/RootNavigator";
+import { setupNotificationChannel } from "./src/utils/notifications";
 
 // Componente interno que carga los datos iniciales
 function AppContent() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
+    // Configurar canal de notificaciones (Android)
+    setupNotificationChannel();
+
     // Cargar datos desde AsyncStorage al iniciar
     dispatch(loadUser());
     dispatch(loadReminders());
@@ -25,11 +26,7 @@ function AppContent() {
 export default function App() {
   return (
     <Provider store={store}>
-      <AuthProvider>
-        <RemindersProvider>
-          <RootNavigator />
-        </RemindersProvider>
-      </AuthProvider>
+      <AppContent />
     </Provider>
   );
 }
