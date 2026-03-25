@@ -14,7 +14,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Reminder } from "../context/RemindersContext";
+import { Reminder } from "../store/remindersSlice";
 
 // Colores por prioridad
 const PRIORITY_COLORS = {

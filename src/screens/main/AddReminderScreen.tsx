@@ -23,12 +23,12 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomInput from "../../components/CusstomInput";
 import CustomButton from "../../components/CustomButton";
 import LocationPicker from "../../components/LocationPicker";
+import { useReminders } from "../../store/hooks";
 import {
-  useReminders,
   ReminderPriority,
   ReminderType,
   Reminder,
-} from "../../context/RemindersContext";
+} from "../../store/remindersSlice";
 import { scheduleNotification, ensureNotificationsPermission, cancelNotification } from "../../utils/notifications";
 
 // Opciones de prioridad con sus colores

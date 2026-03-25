@@ -3,26 +3,41 @@
  *
  * Componente invisible que verifica cada 30 segundos
  * si hay recordatorios por fecha que ya deberían activarse.
- * Muestra un Alert cuando encuentra coincidencias.
+ * Muestra notificaciones push reales cuando encuentra coincidencias.
  */
 
 import { useEffect, useRef } from "react";
-import { Alert, AppState } from "react-native";
-import { useReminders } from "../context/RemindersContext";
+import { AppState } from "react-native";
+import { useReminders } from "../store/hooks";
+import {
+  notify,
+  setupNotificationChannel,
+  ensureNotificationsPermission,
+} from "../utils/notifications";
 
 export default function ReminderChecker() {
-  const { reminders, markTriggered, toggleCompleted } = useReminders();
+  const { reminders, markTriggered } = useReminders();
   const appState = useRef(AppState.currentState);
-  const lastCheck = useRef<string[]>([]); // IDs ya notificados
+  const lastCheck = useRef<string[]>([]); // IDs ya notificados en esta sesión
+  const initialized = useRef(false);
+
+  // Configurar canal de notificaciones al montar
+  useEffect(() => {
+    if (!initialized.current) {
+      initialized.current = true;
+      setupNotificationChannel();
+      ensureNotificationsPermission();
+    }
+  }, []);
 
   useEffect(() => {
-    // Funcion que verifica recordatorios
-    const checkReminders = () => {
+    // Función que verifica recordatorios
+    const checkReminders = async () => {
       const now = new Date();
 
       // Filtrar recordatorios que ya deberían activarse
       const hits = reminders.filter((r) => {
-        // Ya fue notificado en esta sesion
+        // Ya fue notificado en esta sesión
         if (lastCheck.current.includes(r.id)) return false;
 
         // Debe estar habilitado y no completado
@@ -36,7 +51,9 @@ export default function ReminderChecker() {
 
         // Crear fecha en hora local
         const [year, month, day] = r.scheduledDate.split("-").map(Number);
-        const [hours, minutes] = (r.scheduledTime || "00:00").split(":").map(Number);
+        const [hours, minutes] = (r.scheduledTime || "00:00")
+          .split(":")
+          .map(Number);
         const scheduled = new Date(year, month - 1, day, hours, minutes);
 
         return scheduled <= now;
@@ -44,22 +61,19 @@ export default function ReminderChecker() {
 
       // Notificar cada uno
       if (hits.length > 0) {
-        hits.forEach((r) => {
+        for (const r of hits) {
           // Marcar como notificado para no repetir
           lastCheck.current.push(r.id);
 
-          // Registrar activacion
+          // Registrar activación
           markTriggered(r.id, "datetime");
-        });
 
-        // Mostrar Alert con todos los recordatorios
-        const titles = hits.map((r) => `• ${r.title}`).join("\n");
-        Alert.alert(
-          "ContextNote - Recordatorio",
-          hits.length === 1
-            ? hits[0].title
-            : `Tienes ${hits.length} recordatorios:\n${titles}`
-        );
+          // Enviar notificación push real
+          await notify(
+            "ContextNote",
+            r.title + (r.note ? `\n${r.note}` : "")
+          );
+        }
       }
     };
 
@@ -69,9 +83,12 @@ export default function ReminderChecker() {
     // Verificar cada 30 segundos
     const interval = setInterval(checkReminders, 30000);
 
-    // Tambien verificar cuando la app vuelve al frente
+    // También verificar cuando la app vuelve al frente
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (appState.current.match(/inactive|background/) && nextState === "active") {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === "active"
+      ) {
         checkReminders();
       }
       appState.current = nextState;

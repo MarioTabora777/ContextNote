@@ -21,7 +21,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
-import { useReminders } from "../../context/RemindersContext";
+import { useReminders } from "../../store/hooks";
 import CustomButton from "../../components/CustomButton";
 import ReminderCard from "../../components/ReminderCard";
 import { distanceMeters } from "../../utils/geo";
