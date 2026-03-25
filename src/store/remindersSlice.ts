@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../storage/keys";
+import { supabase, DbReminder } from "../services/supabase";
 import { AppDispatch, RootState } from "./index";
 
 // ============ TIPOS ============
@@ -35,6 +36,46 @@ type RemindersState = {
   reminders: Reminder[];
   isLoading: boolean;
 };
+
+// ============ HELPERS ============
+
+// Convertir de DB a App
+const fromDb = (db: DbReminder): Reminder => ({
+  id: db.id,
+  title: db.title,
+  note: db.note || undefined,
+  latitude: db.latitude || undefined,
+  longitude: db.longitude || undefined,
+  radiusMeters: db.radius_meters || undefined,
+  scheduledDate: db.scheduled_date || undefined,
+  scheduledTime: db.scheduled_time || undefined,
+  priority: db.priority,
+  reminderType: db.reminder_type,
+  isEnabled: db.is_enabled,
+  isCompleted: db.is_completed,
+  createdAt: db.created_at,
+  lastTriggeredAt: db.last_triggered_at || undefined,
+  triggerHistory: db.trigger_history || [],
+});
+
+// Convertir de App a DB
+const toDb = (r: Reminder, userId: string): Omit<DbReminder, "created_at"> => ({
+  id: r.id,
+  user_id: userId,
+  title: r.title,
+  note: r.note || null,
+  latitude: r.latitude || null,
+  longitude: r.longitude || null,
+  radius_meters: r.radiusMeters || null,
+  scheduled_date: r.scheduledDate || null,
+  scheduled_time: r.scheduledTime || null,
+  priority: r.priority,
+  reminder_type: r.reminderType,
+  is_enabled: r.isEnabled,
+  is_completed: r.isCompleted,
+  last_triggered_at: r.lastTriggeredAt || null,
+  trigger_history: r.triggerHistory,
+});
 
 // ============ ESTADO INICIAL ============
 
@@ -117,18 +158,38 @@ export const {
   markTriggeredSync,
 } = remindersSlice.actions;
 
-// ============ HELPER: Persistir en AsyncStorage ============
+// ============ HELPER: Persistir localmente ============
 
-const persistReminders = async (getState: () => RootState) => {
+const persistLocal = async (getState: () => RootState) => {
   const { reminders } = getState().reminders;
   await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
 };
 
-// ============ THUNKS (acciones asíncronas) ============
+// ============ THUNKS ============
 
-// Cargar recordatorios desde AsyncStorage
-export const loadReminders = () => async (dispatch: AppDispatch) => {
+// Cargar recordatorios desde Supabase (o local si no hay conexión)
+export const loadReminders = () => async (dispatch: AppDispatch, getState: () => RootState) => {
   try {
+    const user = getState().auth.user;
+
+    if (user) {
+      // Intentar cargar desde Supabase
+      const { data, error } = await supabase
+        .from("reminders")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        const reminders = data.map(fromDb);
+        dispatch(setReminders(reminders));
+        // Guardar copia local
+        await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
+        return;
+      }
+    }
+
+    // Fallback: cargar desde local
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
     if (raw) {
       dispatch(setReminders(JSON.parse(raw)));
@@ -136,7 +197,13 @@ export const loadReminders = () => async (dispatch: AppDispatch) => {
       dispatch(setLoading(false));
     }
   } catch {
-    dispatch(setLoading(false));
+    // Fallback local
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
+    if (raw) {
+      dispatch(setReminders(JSON.parse(raw)));
+    } else {
+      dispatch(setLoading(false));
+    }
   }
 };
 
@@ -152,8 +219,16 @@ export const addReminder = (
     triggerHistory: [],
     isCompleted: false,
   };
+
   dispatch(addReminderSync(newReminder));
-  await persistReminders(getState);
+  await persistLocal(getState);
+
+  // Sincronizar con Supabase
+  const user = getState().auth.user;
+  if (user) {
+    await supabase.from("reminders").insert(toDb(newReminder, user.id));
+  }
+
   return id;
 };
 
@@ -161,49 +236,97 @@ export const addReminder = (
 export const updateReminder = (id: string, updates: Partial<Reminder>) =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
     dispatch(updateReminderSync({ id, updates }));
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    // Sincronizar con Supabase
+    const user = getState().auth.user;
+    if (user) {
+      const reminder = getState().reminders.reminders.find(r => r.id === id);
+      if (reminder) {
+        await supabase.from("reminders").upsert(toDb(reminder, user.id));
+      }
+    }
   };
 
 // Eliminar recordatorio
 export const deleteReminder = (id: string) =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
     dispatch(deleteReminderSync(id));
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    // Sincronizar con Supabase
+    await supabase.from("reminders").delete().eq("id", id);
   };
 
 // Eliminar todos los recordatorios
 export const deleteAllReminders = () =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
+    const user = getState().auth.user;
     dispatch(deleteAllRemindersSync());
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    // Sincronizar con Supabase
+    if (user) {
+      await supabase.from("reminders").delete().eq("user_id", user.id);
+    }
   };
 
-// Limpiar todo el historial
+// Limpiar historial
 export const clearAllHistory = () =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
     dispatch(clearAllHistorySync());
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    // Sincronizar con Supabase
+    const user = getState().auth.user;
+    if (user) {
+      const reminders = getState().reminders.reminders;
+      for (const r of reminders) {
+        await supabase.from("reminders").update({
+          trigger_history: [],
+          last_triggered_at: null,
+        }).eq("id", r.id);
+      }
+    }
   };
 
 // Toggle activar/desactivar
 export const toggleReminder = (id: string) =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
     dispatch(toggleReminderSync(id));
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    const reminder = getState().reminders.reminders.find(r => r.id === id);
+    if (reminder) {
+      await supabase.from("reminders").update({ is_enabled: reminder.isEnabled }).eq("id", id);
+    }
   };
 
 // Toggle completado
 export const toggleCompleted = (id: string) =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
     dispatch(toggleCompletedSync(id));
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    const reminder = getState().reminders.reminders.find(r => r.id === id);
+    if (reminder) {
+      await supabase.from("reminders").update({ is_completed: reminder.isCompleted }).eq("id", id);
+    }
   };
 
 // Marcar como disparado
 export const markTriggered = (id: string, type: "location" | "datetime") =>
   async (dispatch: AppDispatch, getState: () => RootState) => {
     dispatch(markTriggeredSync({ id, type }));
-    await persistReminders(getState);
+    await persistLocal(getState);
+
+    const reminder = getState().reminders.reminders.find(r => r.id === id);
+    if (reminder) {
+      await supabase.from("reminders").update({
+        trigger_history: reminder.triggerHistory,
+        last_triggered_at: reminder.lastTriggeredAt,
+      }).eq("id", id);
+    }
   };
 
 // ============ SELECTORES ============
@@ -211,7 +334,6 @@ export const markTriggered = (id: string, type: "location" | "datetime") =>
 export const selectReminders = (state: RootState) => state.reminders.reminders;
 export const selectRemindersLoading = (state: RootState) => state.reminders.isLoading;
 
-// Estadísticas
 export const selectStats = (state: RootState) => {
   const reminders = state.reminders.reminders;
   return {
@@ -226,7 +348,6 @@ export const selectStats = (state: RootState) => {
   };
 };
 
-// Top disparados
 export const selectTopTriggered = (limit = 5) => (state: RootState) => {
   return [...state.reminders.reminders]
     .filter(r => (r.triggerHistory?.length || 0) > 0)
@@ -234,7 +355,6 @@ export const selectTopTriggered = (limit = 5) => (state: RootState) => {
     .slice(0, limit);
 };
 
-// Próximos recordatorios
 export const selectUpcoming = (limit = 5) => (state: RootState) => {
   const now = new Date();
   return [...state.reminders.reminders]

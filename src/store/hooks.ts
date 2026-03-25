@@ -17,10 +17,11 @@ export const useAuth = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector(state => state.auth.user);
   const isLoading = useAppSelector(state => state.auth.isLoading);
+  const error = useAppSelector(state => state.auth.error);
 
   const login = useCallback(
-    async (email: string, name?: string) => {
-      return dispatch(authActions.login(email, name));
+    async (email: string, password: string) => {
+      return dispatch(authActions.login(email, password));
     },
     [dispatch]
   );
@@ -36,7 +37,7 @@ export const useAuth = () => {
     return dispatch(authActions.logout());
   }, [dispatch]);
 
-  return { user, isLoading, login, register, logout };
+  return { user, isLoading, error, login, register, logout };
 };
 
 // ============ useReminders - Compatible con RemindersContext ============

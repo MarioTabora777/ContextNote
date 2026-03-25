@@ -9,7 +9,7 @@ import { AuthStackParamList } from "../../navigation/AuthNavigator";
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
 export default function LoginScreen({ navigation }: Props) {
-  const { login } = useAuth();
+  const { login, error, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -27,8 +27,8 @@ export default function LoginScreen({ navigation }: Props) {
 
   const onLogin = async () => {
     if (!validate()) return;
-    const ok = await login(email.trim());
-    if (!ok) Alert.alert("Error", "Credenciales inválidas");
+    const ok = await login(email.trim(), password);
+    if (!ok && error) Alert.alert("Error", error);
   };
 
   return (
