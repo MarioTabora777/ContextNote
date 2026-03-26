@@ -8,8 +8,7 @@
  * en una esfera (la Tierra). Considera la curvatura terrestre,
  * a diferencia de una simple distancia euclidiana.
  *
- * Uso: Se usa en ReminderChecker.tsx para el GEOFENCING,
- * comparando la ubicación del usuario con la del recordatorio.
+
  */
 
 export function distanceMeters(

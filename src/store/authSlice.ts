@@ -1,21 +1,5 @@
-/**
- * authSlice.ts - Manejo de autenticación con Redux Toolkit
- *
- * PATRÓN REDUX:
- * - SLICE: Contiene el estado (state), las acciones (reducers) y los thunks
- * - ESTADO: user (usuario actual), isLoading, error
- * - THUNKS: Funciones asíncronas que llaman a Supabase y luego dispatch acciones
- *
- * FLUJO DE AUTENTICACIÓN:
- * 1. Usuario ingresa email/password
- * 2. Llamamos supabase.auth.signInWithPassword()
- * 3. Supabase valida y retorna JWT + datos del usuario
- * 4. Guardamos el usuario en Redux con dispatch(setUser())
- * 5. La sesión se persiste automáticamente en AsyncStorage
- *
- * SEGURIDAD: Las contraseñas NUNCA se guardan localmente,
- * Supabase las hashea con bcrypt en el servidor.
- */
+
+
 
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { supabase } from "../services/supabase";

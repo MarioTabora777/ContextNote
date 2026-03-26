@@ -1,24 +1,4 @@
-/**
- * ReminderChecker.tsx - COMPONENTE CORE DE LA APP
- *
- * Este es el "cerebro" de ContextNote. Verifica cada 30 segundos:
- * 1. Recordatorios por FECHA/HORA → ¿Ya pasó la fecha programada?
- * 2. Recordatorios por UBICACIÓN → ¿El usuario está cerca? (GEOFENCING)
- *
- * GEOFENCING: Técnica que crea "cercas virtuales" alrededor de ubicaciones.
- * Cuando el usuario entra en el radio definido, se dispara una notificación.
- *
- * ARQUITECTURA:
- * - Es un componente "headless" (no renderiza UI, retorna null)
- * - Se monta en App.tsx y corre en background mientras la app está abierta
- * - Usa useRef para evitar notificaciones duplicadas en la misma sesión
- * - Se reactiva cuando la app vuelve del background (AppState listener)
- *
- * FLUJO GEOFENCING:
- * 1. Obtiene ubicación actual del usuario (GPS)
- * 2. Para cada recordatorio tipo "location", calcula distancia con Haversine
- * 3. Si distancia <= radio → dispara notificación push
- */
+
 
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
