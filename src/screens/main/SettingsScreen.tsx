@@ -11,14 +11,13 @@
  * - Cerrar sesión
  */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -93,10 +92,6 @@ export default function SettingsScreen() {
   const { reminders, getStats, deleteAllReminders, clearAllHistory } = useReminders();
   const stats = getStats();
 
-  // Estados para los switches (solo visuales por ahora)
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [locationEnabled, setLocationEnabled] = useState(true);
-
   // Limpiar historial de activaciones
   const handleClearHistory = () => {
     if (reminders.length === 0) {
@@ -144,15 +139,6 @@ export default function SettingsScreen() {
     );
   };
 
-  // Exportar datos
-  const handleExportData = () => {
-    Alert.alert(
-      "Exportar datos",
-      "Tus datos han sido preparados para exportar.",
-      [{ text: "OK" }]
-    );
-  };
-
   // Cerrar sesión con confirmación
   const handleLogout = () => {
     Alert.alert(
@@ -196,42 +182,9 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Sección: Preferencias */}
-      <Text style={styles.sectionTitle}>Preferencias</Text>
-      <View style={styles.section}>
-        <SettingItem
-          icon="notifications"
-          title="Notificaciones"
-          subtitle="Recibir alertas de recordatorios"
-          rightElement={
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-            />
-          }
-        />
-        <SettingItem
-          icon="location"
-          title="Ubicacion"
-          subtitle="Permitir acceso a tu ubicacion"
-          rightElement={
-            <Switch
-              value={locationEnabled}
-              onValueChange={setLocationEnabled}
-            />
-          }
-        />
-      </View>
-
       {/* Sección: Datos */}
       <Text style={styles.sectionTitle}>Datos</Text>
       <View style={styles.section}>
-        <SettingItem
-          icon="download-outline"
-          title="Exportar datos"
-          subtitle="Descargar tus recordatorios"
-          onPress={handleExportData}
-        />
         <SettingItem
           icon="refresh-outline"
           title="Limpiar historial"
@@ -253,12 +206,7 @@ export default function SettingsScreen() {
         <SettingItem
           icon="information-circle-outline"
           title="Acerca de"
-          subtitle="ContextNote v1.0.0"
-        />
-        <SettingItem
-          icon="help-circle-outline"
-          title="Ayuda"
-          subtitle="Preguntas frecuentes"
+          subtitle="ContextNote v1.0.0 - Proyecto Ceutec"
         />
       </View>
 
