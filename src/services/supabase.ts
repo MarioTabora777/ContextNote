@@ -1,8 +1,18 @@
 /**
- * supabase.ts
+ * supabase.ts - Configuración del cliente Supabase
  *
- * Cliente de Supabase para la app.
- * Usa autenticación nativa de Supabase (supabase.auth).
+ * SUPABASE: Es un Backend-as-a-Service (BaaS) similar a Firebase.
+ * Proporciona: Base de datos PostgreSQL, Autenticación, Storage, etc.
+ *
+ * ARQUITECTURA:
+ * - Usamos supabase.auth para autenticación (login/registro)
+ * - Usamos supabase.from("tabla") para operaciones CRUD
+ * - AsyncStorage persiste la sesión del usuario en el dispositivo
+ *
+ * SEGURIDAD:
+ * - ANON_KEY es pública (solo permite operaciones permitidas por RLS)
+ * - RLS (Row Level Security) en Supabase protege los datos por usuario
+ * - Las contraseñas se hashean automáticamente con bcrypt
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -13,13 +23,12 @@ const SUPABASE_URL = "https://nrfbkdokqlwqlbzbniqj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_secret_5rqvR-OWTPZzcugFbJnFcw_k62w5PmV";
 
 // ============ CLIENTE ============
-// Configuramos AsyncStorage para persistir la sesión en React Native
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+    storage: AsyncStorage,        // Persistir sesión en dispositivo móvil
+    autoRefreshToken: true,       // Renovar JWT automáticamente
+    persistSession: true,         // Mantener sesión entre reinicios
+    detectSessionInUrl: false,    // Desactivado porque no es web
   },
 });
 

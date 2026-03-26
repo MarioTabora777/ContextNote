@@ -1,3 +1,25 @@
+/**
+ * remindersSlice.ts - Gestión de recordatorios con Redux Toolkit
+ *
+ * ARQUITECTURA DE DATOS (3 capas de persistencia):
+ * 1. REDUX (memoria): Estado reactivo para la UI
+ * 2. ASYNCSTORAGE (local): Persistencia offline en el dispositivo
+ * 3. SUPABASE (nube): Sincronización con el servidor
+ *
+ * PATRÓN OPTIMISTIC UPDATE:
+ * - Primero actualizamos Redux (UI inmediata)
+ * - Luego AsyncStorage (persistencia local)
+ * - Finalmente Supabase (sincronización remota)
+ * Esto hace que la app se sienta rápida aunque haya latencia de red.
+ *
+ * THUNKS: Son funciones asíncronas que pueden hacer dispatch de acciones.
+ * Ejemplo: addReminder() → dispatch(addReminderSync) → persistLocal → supabase.insert
+ *
+ * SELECTORES: Funciones que extraen datos del estado.
+ * selectStats, selectUpcoming, selectTopTriggered permiten
+ * calcular estadísticas sin duplicar lógica en componentes.
+ */
+
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../storage/keys";
